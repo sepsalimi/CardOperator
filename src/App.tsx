@@ -14,6 +14,7 @@ import { Timer } from './components/Timer';
 import { evaluateEquation } from './game/evaluateEquation';
 import { generatePuzzle } from './game/generatePuzzle';
 import { scoreForCorrectAnswer } from './game/scoring';
+import { adjustDeadline, remainingFromDeadline } from './game/time';
 import { difficultyConfig, type Difficulty, type Puzzle } from './game/types';
 import { useSoundEffects } from './hooks/useSoundEffects';
 import {
@@ -98,6 +99,15 @@ export default function App() {
     setScreen('game');
   }
 
+  function changeTime(deltaMs: number): number {
+    const now = Date.now();
+    const nextDeadline = adjustDeadline(endAtRef.current, deltaMs, now);
+    const nextRemaining = remainingFromDeadline(nextDeadline, now);
+    endAtRef.current = nextDeadline;
+    setRemainingMs(nextRemaining);
+    return nextRemaining;
+  }
+
   function placeCard(cardId: string, targetIndex?: number) {
     if (feedback === 'correct') return;
     const destination = targetIndex ?? selectedSlot ?? slots.findIndex((id) => id === null);
@@ -140,6 +150,7 @@ export default function App() {
     ];
     if (evaluateEquation(values, puzzle.operators) === puzzle.target) {
       playCorrect();
+      changeTime(5_000);
       setFeedback('correct');
       setScore((value) => value + scoreForCorrectAnswer(difficulty));
       setSolved((value) => value + 1);
@@ -150,7 +161,12 @@ export default function App() {
       }, 420);
     } else {
       playWrong();
+      const nextRemaining = changeTime(-2_000);
       setFeedback('incorrect');
+      if (nextRemaining === 0) {
+        finishGame();
+        return;
+      }
       feedbackTimeoutRef.current = window.setTimeout(() => setFeedback('idle'), 650);
     }
   }
@@ -283,9 +299,9 @@ export default function App() {
               </div>
               <div className={`feedback-message ${feedback}`} role="status" aria-live="polite">
                 {feedback === 'correct'
-                  ? `Perfect! +${scoreForCorrectAnswer(difficulty)}`
+                  ? `Perfect! +${scoreForCorrectAnswer(difficulty)} points · +5 seconds`
                   : feedback === 'incorrect'
-                    ? 'Not quite — try another order'
+                    ? 'Not quite — 2 seconds lost'
                     : 'Build the equation'}
               </div>
               <div className="card-tray">

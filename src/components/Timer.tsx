@@ -4,7 +4,7 @@ interface Props {
 
 export function Timer({ remainingMs }: Props) {
   const seconds = Math.max(0, Math.ceil(remainingMs / 1000));
-  const progress = Math.max(0, remainingMs / 60_000);
+  const progress = Math.min(1, Math.max(0, remainingMs / 60_000));
   return (
     <div
       className={`timer ${seconds <= 10 ? 'urgent' : ''}`}
