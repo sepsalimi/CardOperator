@@ -4,6 +4,12 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
   base: process.env.GITHUB_ACTIONS ? '/card-number-game/' : '/',
+  server: {
+    host: '0.0.0.0',
+    port: 5173,
+    strictPort: true,
+    allowedHosts: ['sepehrg14.taild0ec92.ts.net'],
+  },
   plugins: [
     react(),
     VitePWA({
