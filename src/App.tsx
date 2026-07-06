@@ -15,6 +15,7 @@ import { evaluateEquation } from './game/evaluateEquation';
 import { generatePuzzle } from './game/generatePuzzle';
 import { scoreForCorrectAnswer } from './game/scoring';
 import { difficultyConfig, type Difficulty, type Puzzle } from './game/types';
+import { useSoundEffects } from './hooks/useSoundEffects';
 import {
   emptyBestScores,
   loadBestScores,
@@ -46,6 +47,7 @@ export default function App() {
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 120, tolerance: 8 } }),
   );
+  const { muted, toggleMuted, playPlace, playCorrect, playWrong } = useSoundEffects();
 
   useEffect(() => setBestScores(loadBestScores()), []);
 
@@ -98,10 +100,11 @@ export default function App() {
 
   function placeCard(cardId: string, targetIndex?: number) {
     if (feedback === 'correct') return;
+    const destination = targetIndex ?? selectedSlot ?? slots.findIndex((id) => id === null);
+    if (destination < 0 || destination > 2) return;
+    playPlace();
     setSlots((current) => {
       const currentIndex = current.indexOf(cardId);
-      const destination = targetIndex ?? selectedSlot ?? current.findIndex((id) => id === null);
-      if (destination < 0 || destination > 2) return current;
       const next = [...current] as [string | null, string | null, string | null];
       const displaced = next[destination];
       if (currentIndex >= 0) next[currentIndex] = displaced;
@@ -136,6 +139,7 @@ export default function App() {
       number,
     ];
     if (evaluateEquation(values, puzzle.operators) === puzzle.target) {
+      playCorrect();
       setFeedback('correct');
       setScore((value) => value + scoreForCorrectAnswer(difficulty));
       setSolved((value) => value + 1);
@@ -145,6 +149,7 @@ export default function App() {
         setFeedback('idle');
       }, 420);
     } else {
+      playWrong();
       setFeedback('incorrect');
       feedbackTimeoutRef.current = window.setTimeout(() => setFeedback('idle'), 650);
     }
@@ -222,6 +227,15 @@ export default function App() {
             <header className="game-header">
               <button className="icon-button" type="button" onClick={pause} aria-label="Pause game">
                 Ⅱ
+              </button>
+              <button
+                className={`icon-button sound-button ${muted ? 'muted' : ''}`}
+                type="button"
+                onClick={toggleMuted}
+                aria-label={muted ? 'Turn sound on' : 'Mute sound'}
+                aria-pressed={muted}
+              >
+                {muted ? '♩' : '♫'}
               </button>
               <div className="score-block">
                 <small>Score</small>
