@@ -2,6 +2,24 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 const SOUND_KEY = 'card-operator:sound-muted:v1';
 
+type AudioWindow = Window & { webkitAudioContext?: typeof AudioContext };
+
+function loadMutedPreference(): boolean {
+  try {
+    return window.localStorage.getItem(SOUND_KEY) === 'true';
+  } catch {
+    return false;
+  }
+}
+
+function saveMutedPreference(muted: boolean): void {
+  try {
+    window.localStorage.setItem(SOUND_KEY, String(muted));
+  } catch {
+    // Sound still works when storage is unavailable, but the preference is session-only.
+  }
+}
+
 interface ToneOptions {
   frequency: number;
   endFrequency?: number;
@@ -12,14 +30,16 @@ interface ToneOptions {
 }
 
 export function useSoundEffects() {
-  const [muted, setMuted] = useState(() => localStorage.getItem(SOUND_KEY) === 'true');
+  const [muted, setMuted] = useState(loadMutedPreference);
   const contextRef = useRef<AudioContext | null>(null);
 
   useEffect(() => () => void contextRef.current?.close(), []);
 
   const getContext = useCallback(() => {
     if (muted) return null;
-    const context = contextRef.current ?? new AudioContext();
+    const AudioContextClass = window.AudioContext ?? (window as AudioWindow).webkitAudioContext;
+    if (!AudioContextClass) return null;
+    const context = contextRef.current ?? new AudioContextClass();
     contextRef.current = context;
     if (context.state === 'suspended') void context.resume();
     return context;
@@ -85,7 +105,7 @@ export function useSoundEffects() {
   const toggleMuted = useCallback(() => {
     setMuted((current) => {
       const next = !current;
-      localStorage.setItem(SOUND_KEY, String(next));
+      saveMutedPreference(next);
       return next;
     });
   }, []);
