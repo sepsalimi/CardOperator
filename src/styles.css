@@ -235,6 +235,7 @@ h2 {
   flex-direction: column;
 }
 .game-header {
+  position: relative;
   display: grid;
   grid-template-columns: 44px 44px 1fr 54px;
   gap: 4px;
@@ -261,7 +262,11 @@ h2 {
   text-decoration-thickness: 2px;
 }
 .score-block {
+  position: absolute;
+  left: 50%;
   text-align: center;
+  transform: translateX(-50%);
+  pointer-events: none;
 }
 .score-block small,
 .score-block strong {

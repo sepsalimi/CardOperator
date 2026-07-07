@@ -9,6 +9,7 @@ import {
 
 export type RandomSource = () => number;
 let puzzleSequence = 0;
+const highPrecedenceOperators = new Set<Operator>(['*', '/']);
 
 const integer = (random: RandomSource, min: number, max: number) =>
   Math.floor(random() * (max - min + 1)) + min;
@@ -25,19 +26,86 @@ function shuffle<T>(random: RandomSource, input: T[]): T[] {
   return result;
 }
 
-export function generatePuzzle(difficulty: Difficulty, random: RandomSource = Math.random): Puzzle {
-  const allowed = difficultyConfig[difficulty].operators;
-  let values: [number, number, number] = [1, 1, 1];
-  let operators: [Operator, Operator] = ['+', '+'];
-  let target = 3;
+interface EquationCandidate {
+  values: [number, number, number];
+  operators: [Operator, Operator];
+}
 
-  for (let attempt = 0; attempt < 100; attempt += 1) {
-    values = [integer(random, 1, 12), integer(random, 1, 12), integer(random, 1, 12)];
-    operators = [choose(random, allowed), choose(random, allowed)];
-    target = evaluateEquation(values, operators);
-    if (target >= 0 && target <= 150) break;
+export function solutionNumberSignature(values: readonly number[]): string {
+  return [...values].sort((left, right) => left - right).join(',');
+}
+
+export function orderOperatorsByPrecedence(operators: [Operator, Operator]): [Operator, Operator] {
+  const [first, second] = operators;
+  if (!highPrecedenceOperators.has(first) && highPrecedenceOperators.has(second)) {
+    return [second, first];
+  }
+  return operators;
+}
+
+function findFallbackEquation(
+  difficulty: Difficulty,
+  excludedSignatures: ReadonlySet<string>,
+): EquationCandidate {
+  const allowed =
+    difficulty === 'hard'
+      ? (['/', '*', '+', '-'] as Operator[])
+      : difficultyConfig[difficulty].operators;
+  for (let first = 1; first <= 12; first += 1) {
+    for (let second = 1; second <= 12; second += 1) {
+      for (let third = 1; third <= 12; third += 1) {
+        const values: [number, number, number] = [first, second, third];
+        if (excludedSignatures.has(solutionNumberSignature(values))) continue;
+        for (const firstOperator of allowed) {
+          for (const secondOperator of allowed) {
+            const operators = orderOperatorsByPrecedence([firstOperator, secondOperator]);
+            try {
+              const target = evaluateEquation(values, operators);
+              if (target >= 0 && target <= 150) return { values, operators };
+            } catch {
+              // Continue until division resolves to a whole number.
+            }
+          }
+        }
+      }
+    }
+  }
+  throw new Error('No unique puzzle number combinations remain for this round');
+}
+
+export function generatePuzzle(
+  difficulty: Difficulty,
+  random: RandomSource = Math.random,
+  excludedSignatures: ReadonlySet<string> = new Set(),
+): Puzzle {
+  const allowed = difficultyConfig[difficulty].operators;
+  let equation: EquationCandidate | null = null;
+
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    const values: [number, number, number] = [
+      integer(random, 1, 12),
+      integer(random, 1, 12),
+      integer(random, 1, 12),
+    ];
+    if (excludedSignatures.has(solutionNumberSignature(values))) continue;
+    const operators = orderOperatorsByPrecedence([
+      choose(random, allowed),
+      choose(random, allowed),
+    ]);
+    try {
+      const target = evaluateEquation(values, operators);
+      if (target >= 0 && target <= 150) {
+        equation = { values, operators };
+        break;
+      }
+    } catch {
+      // Retry division candidates that do not resolve to whole numbers.
+    }
   }
 
+  equation ??= findFallbackEquation(difficulty, excludedSignatures);
+  const { values, operators } = equation;
+  const target = evaluateEquation(values, operators);
   const sequence = puzzleSequence++;
   const solutionCards = values.map((value, index) => ({ id: `p${sequence}-s${index}`, value })) as [
     NumberCard,
@@ -66,4 +134,14 @@ export function isPuzzleSolvable(puzzle: Puzzle): boolean {
     values.every((value): value is number => value !== undefined) &&
     evaluateEquation(values as [number, number, number], puzzle.operators) === puzzle.target
   );
+}
+
+export function puzzleNumberSignature(puzzle: Puzzle): string {
+  const values = puzzle.solutionCardIds.map(
+    (id) => puzzle.cards.find((card) => card.id === id)?.value,
+  );
+  if (!values.every((value): value is number => value !== undefined)) {
+    throw new Error('Puzzle solution cards are missing');
+  }
+  return solutionNumberSignature(values);
 }

@@ -102,6 +102,15 @@ export function useSoundEffects() {
     [playTones],
   );
 
+  const playTick = useCallback(
+    () =>
+      playTones([
+        { frequency: 880, endFrequency: 440, duration: 0.07, volume: 0.045, type: 'square' },
+        { frequency: 1760, duration: 0.025, volume: 0.018, type: 'triangle' },
+      ]),
+    [playTones],
+  );
+
   const toggleMuted = useCallback(() => {
     setMuted((current) => {
       const next = !current;
@@ -110,5 +119,5 @@ export function useSoundEffects() {
     });
   }, []);
 
-  return { muted, toggleMuted, playPlace, playCorrect, playWrong };
+  return { muted, toggleMuted, playPlace, playCorrect, playWrong, playTick };
 }

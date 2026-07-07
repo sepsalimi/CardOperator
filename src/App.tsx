@@ -12,7 +12,7 @@ import { CardSlot } from './components/CardSlot';
 import { NumberCard } from './components/NumberCard';
 import { Timer } from './components/Timer';
 import { evaluateEquation } from './game/evaluateEquation';
-import { generatePuzzle } from './game/generatePuzzle';
+import { generatePuzzle, puzzleNumberSignature } from './game/generatePuzzle';
 import { scoreForCorrectAnswer } from './game/scoring';
 import { adjustDeadline, remainingFromDeadline } from './game/time';
 import { difficultyConfig, type Difficulty, type Puzzle } from './game/types';
@@ -26,6 +26,7 @@ import {
 
 type Screen = 'home' | 'game' | 'paused' | 'results';
 type Feedback = 'idle' | 'correct' | 'incorrect';
+type TimeChange = { id: number; value: 5 | -2 };
 const EMPTY_SLOTS: [string | null, string | null, string | null] = [null, null, null];
 
 const symbols = { '+': '+', '-': '−', '*': '×', '/': '÷' } as const;
@@ -42,15 +43,52 @@ export default function App() {
   const [feedback, setFeedback] = useState<Feedback>('idle');
   const [bestScores, setBestScores] = useState<BestScores>(emptyBestScores);
   const [newBest, setNewBest] = useState(false);
+  const [timeChange, setTimeChange] = useState<TimeChange | null>(null);
   const endAtRef = useRef(0);
   const feedbackTimeoutRef = useRef<number | undefined>(undefined);
+  const timeChangeTimeoutRef = useRef<number | undefined>(undefined);
+  const timeChangeSequenceRef = useRef(0);
+  const seenPuzzleSignaturesRef = useRef(new Set<string>());
+  const lastTickSecondRef = useRef<number | null>(null);
+  const screenRef = useRef<Screen>(screen);
+  const backGuardArmedRef = useRef(false);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 120, tolerance: 8 } }),
   );
-  const { muted, toggleMuted, playPlace, playCorrect, playWrong } = useSoundEffects();
+  const { muted, toggleMuted, playPlace, playCorrect, playWrong, playTick } = useSoundEffects();
 
   useEffect(() => setBestScores(loadBestScores()), []);
+
+  useEffect(() => {
+    screenRef.current = screen;
+  }, [screen]);
+
+  function armBackGuard() {
+    if (backGuardArmedRef.current) return;
+    window.history.pushState({ cardOperatorGuard: true }, '', window.location.href);
+    backGuardArmedRef.current = true;
+  }
+
+  useEffect(() => {
+    const handlePopState = () => {
+      if (screenRef.current !== 'game' && screenRef.current !== 'paused') {
+        backGuardArmedRef.current = false;
+        return;
+      }
+
+      window.history.pushState({ cardOperatorGuard: true }, '', window.location.href);
+      backGuardArmedRef.current = true;
+
+      if (screenRef.current === 'game') {
+        setRemainingMs(Math.max(0, endAtRef.current - Date.now()));
+        setScreen('paused');
+      }
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   const finishGame = useCallback(() => {
     setScreen('results');
@@ -67,24 +105,47 @@ export default function App() {
     const update = () => {
       const next = Math.max(0, endAtRef.current - Date.now());
       setRemainingMs(next);
+      const wholeSeconds = Math.ceil(next / 1000);
+      if (wholeSeconds > 10) lastTickSecondRef.current = null;
+      if (wholeSeconds > 0 && wholeSeconds <= 10 && lastTickSecondRef.current !== wholeSeconds) {
+        lastTickSecondRef.current = wholeSeconds;
+        playTick();
+      }
       if (next === 0) finishGame();
     };
     update();
     const interval = window.setInterval(update, 100);
     return () => window.clearInterval(interval);
-  }, [screen, finishGame]);
+  }, [screen, finishGame, playTick]);
 
-  useEffect(() => () => window.clearTimeout(feedbackTimeoutRef.current), []);
+  useEffect(
+    () => () => {
+      window.clearTimeout(feedbackTimeoutRef.current);
+      window.clearTimeout(timeChangeTimeoutRef.current);
+    },
+    [],
+  );
+
+  function createPuzzleForRound(resetHistory = false): Puzzle {
+    if (resetHistory) seenPuzzleSignaturesRef.current.clear();
+    const nextPuzzle = generatePuzzle(difficulty, Math.random, seenPuzzleSignaturesRef.current);
+    seenPuzzleSignaturesRef.current.add(puzzleNumberSignature(nextPuzzle));
+    return nextPuzzle;
+  }
 
   function startGame() {
     window.clearTimeout(feedbackTimeoutRef.current);
-    setPuzzle(generatePuzzle(difficulty));
+    window.clearTimeout(timeChangeTimeoutRef.current);
+    armBackGuard();
+    lastTickSecondRef.current = null;
+    setPuzzle(createPuzzleForRound(true));
     setSlots([...EMPTY_SLOTS]);
     setScore(0);
     setSolved(0);
     setRemainingMs(60_000);
     setFeedback('idle');
     setNewBest(false);
+    setTimeChange(null);
     endAtRef.current = Date.now() + 60_000;
     setScreen('game');
   }
@@ -95,6 +156,7 @@ export default function App() {
   }
 
   function resume() {
+    lastTickSecondRef.current = null;
     endAtRef.current = Date.now() + remainingMs;
     setScreen('game');
   }
@@ -106,6 +168,13 @@ export default function App() {
     endAtRef.current = nextDeadline;
     setRemainingMs(nextRemaining);
     return nextRemaining;
+  }
+
+  function showTimeChange(value: 5 | -2) {
+    window.clearTimeout(timeChangeTimeoutRef.current);
+    timeChangeSequenceRef.current += 1;
+    setTimeChange({ id: timeChangeSequenceRef.current, value });
+    timeChangeTimeoutRef.current = window.setTimeout(() => setTimeChange(null), 680);
   }
 
   function placeCard(cardId: string, targetIndex?: number) {
@@ -151,17 +220,20 @@ export default function App() {
     if (evaluateEquation(values, puzzle.operators) === puzzle.target) {
       playCorrect();
       changeTime(5_000);
+      showTimeChange(5);
       setFeedback('correct');
       setScore((value) => value + scoreForCorrectAnswer(difficulty));
       setSolved((value) => value + 1);
       feedbackTimeoutRef.current = window.setTimeout(() => {
-        setPuzzle(generatePuzzle(difficulty));
+        const nextPuzzle = createPuzzleForRound();
+        setPuzzle(nextPuzzle);
         setSlots([...EMPTY_SLOTS]);
         setFeedback('idle');
       }, 420);
     } else {
       playWrong();
       const nextRemaining = changeTime(-2_000);
+      showTimeChange(-2);
       setFeedback('incorrect');
       if (nextRemaining === 0) {
         finishGame();
@@ -170,6 +242,8 @@ export default function App() {
       feedbackTimeoutRef.current = window.setTimeout(() => setFeedback('idle'), 650);
     }
   }
+
+  const isCountdownRush = screen === 'game' && remainingMs <= 10_000 && remainingMs > 0;
 
   return (
     <main className="app-shell">
@@ -212,7 +286,7 @@ export default function App() {
                   >
                     <strong>{difficultyConfig[level].label}</strong>
                     <small>
-                      {level === 'easy' ? '+' : level === 'medium' ? '+  −' : '+  −  ×'}
+                      {level === 'easy' ? '+' : level === 'medium' ? '+  −' : '+  −  ×  ÷'}
                     </small>
                   </button>
                 ))}
@@ -255,9 +329,32 @@ export default function App() {
               </button>
               <div className="score-block">
                 <small>Score</small>
-                <strong>{score.toLocaleString()}</strong>
+                <motion.strong
+                  key={score}
+                  initial={{ scale: 1.35, y: -4, color: '#50efbf' }}
+                  animate={{ scale: 1, y: 0, color: '#f8f7ff' }}
+                  transition={{ type: 'spring', stiffness: 520, damping: 24 }}
+                >
+                  {score.toLocaleString()}
+                </motion.strong>
               </div>
-              <Timer remainingMs={remainingMs} />
+              <div className="timer-wrap">
+                <Timer remainingMs={remainingMs} />
+                <AnimatePresence>
+                  {timeChange && (
+                    <motion.span
+                      key={timeChange.id}
+                      className={`time-change ${timeChange.value > 0 ? 'positive' : 'negative'}`}
+                      initial={{ opacity: 0, scale: 0.35, y: 8, rotate: -12 }}
+                      animate={{ opacity: 1, scale: [0.35, 1.35, 1], y: -17, rotate: 0 }}
+                      exit={{ opacity: 0, scale: 0.7, y: -28 }}
+                      transition={{ duration: 0.42, ease: 'easeOut' }}
+                    >
+                      {timeChange.value > 0 ? '+5' : '−2'}
+                    </motion.span>
+                  )}
+                </AnimatePresence>
+              </div>
             </header>
             <div className="mode-chip">{difficultyConfig[difficulty].label} mode</div>
             <section className="target-panel">
@@ -266,6 +363,7 @@ export default function App() {
                 key={puzzle.id}
                 initial={{ scale: 0.65, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
+                transition={{ type: 'spring', stiffness: 520, damping: 20 }}
               >
                 {puzzle.target}
               </motion.strong>
@@ -299,12 +397,12 @@ export default function App() {
               </div>
               <div className={`feedback-message ${feedback}`} role="status" aria-live="polite">
                 {feedback === 'correct'
-                  ? `Perfect! +${scoreForCorrectAnswer(difficulty)} points · +5 seconds`
+                  ? `Perfect! +${scoreForCorrectAnswer(difficulty)} points`
                   : feedback === 'incorrect'
-                    ? 'Not quite — 2 seconds lost'
+                    ? 'Not quite — try another order'
                     : 'Build the equation'}
               </div>
-              <div className="card-tray">
+              <div className={isCountdownRush ? 'card-tray rush-mode' : 'card-tray'}>
                 {puzzle.cards.map((card) => {
                   const used = slots.includes(card.id);
                   return (

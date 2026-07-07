@@ -1,0 +1,165 @@
+.timer-wrap {
+  position: relative;
+  grid-column: 4;
+  justify-self: end;
+  display: grid;
+  place-items: center;
+}
+
+.time-change {
+  position: absolute;
+  z-index: 8;
+  top: 36px;
+  right: -8px;
+  min-width: 40px;
+  padding: 4px 8px;
+  border: 2px solid currentColor;
+  border-radius: 999px;
+  text-align: center;
+  line-height: 1;
+  pointer-events: none;
+  filter: drop-shadow(0 6px 10px #050313cc);
+}
+
+.time-change.positive {
+  color: #39f0a7;
+  background: #0d4433;
+  font:
+    900 1.08rem 'Space Grotesk',
+    sans-serif;
+  box-shadow: 0 0 18px #39f0a766;
+}
+
+.time-change.negative {
+  color: #ff4968;
+  background: #4e1322;
+  font:
+    italic 900 1.06rem 'DM Sans',
+    sans-serif;
+  box-shadow: 0 0 18px #ff49685c;
+}
+
+.target-panel > span {
+  animation: micro-pop 1.1s ease-in-out infinite;
+}
+
+.target-glow {
+  animation: target-beat 1.1s ease-in-out infinite;
+}
+
+.card-space:not(.used) .number-card {
+  animation: card-deal 0.3s cubic-bezier(0.2, 0.9, 0.25, 1.25) both;
+}
+
+.card-tray.rush-mode .card-space:not(.used) {
+  animation: card-shake 0.24s ease-in-out infinite;
+}
+
+.card-tray.rush-mode .card-space:nth-child(2n):not(.used) {
+  animation-delay: -0.08s;
+}
+
+.card-tray.rush-mode .card-space:nth-child(3n):not(.used) {
+  animation-delay: -0.15s;
+}
+
+.card-slot.filled {
+  animation: slot-pop 0.22s cubic-bezier(0.2, 0.9, 0.25, 1.25);
+}
+
+.feedback-message.correct,
+.feedback-message.incorrect {
+  animation: feedback-pop 0.28s cubic-bezier(0.2, 0.9, 0.25, 1.3);
+}
+
+.check-button {
+  position: relative;
+  overflow: hidden;
+}
+
+.check-button:not(:disabled)::after {
+  content: '';
+  position: absolute;
+  inset: -40% auto -40% -35%;
+  width: 24%;
+  background: linear-gradient(90deg, transparent, #fff8, transparent);
+  transform: skewX(-18deg);
+  animation: rush-shine 1.35s ease-in-out infinite;
+}
+
+@keyframes micro-pop {
+  50% {
+    transform: scale(1.045);
+  }
+}
+
+@keyframes target-beat {
+  50% {
+    opacity: 0.4;
+    transform: scale(1.17);
+  }
+}
+
+@keyframes card-deal {
+  from {
+    opacity: 0;
+    transform: translateY(13px) scale(0.72) rotate(-3deg);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1) rotate(0);
+  }
+}
+
+@keyframes card-shake {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) rotate(0);
+  }
+  25% {
+    transform: translate3d(-1px, 1px, 0) rotate(-1.2deg);
+  }
+  50% {
+    transform: translate3d(1px, -1px, 0) rotate(1deg);
+  }
+  75% {
+    transform: translate3d(-1px, 0, 0) rotate(-0.8deg);
+  }
+}
+
+@keyframes slot-pop {
+  50% {
+    transform: translateY(-4px) scale(1.07);
+  }
+}
+
+@keyframes feedback-pop {
+  from {
+    opacity: 0;
+    transform: translateY(5px) scale(0.85);
+  }
+}
+
+@keyframes rush-shine {
+  0%,
+  45% {
+    left: -35%;
+  }
+  75%,
+  100% {
+    left: 125%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .target-panel > span,
+  .target-glow,
+  .card-space:not(.used) .number-card,
+  .card-tray.rush-mode .card-space:not(.used),
+  .card-slot.filled,
+  .feedback-message.correct,
+  .feedback-message.incorrect,
+  .check-button:not(:disabled)::after {
+    animation: none;
+  }
+}

@@ -1,6 +1,12 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { generatePuzzle, isPuzzleSolvable } from '../src/game/generatePuzzle';
+import {
+  generatePuzzle,
+  isPuzzleSolvable,
+  orderOperatorsByPrecedence,
+  puzzleNumberSignature,
+  solutionNumberSignature,
+} from '../src/game/generatePuzzle';
 import { difficultyConfig, type Difficulty } from '../src/game/types';
 
 describe('generatePuzzle', () => {
@@ -31,4 +37,39 @@ describe('generatePuzzle', () => {
       );
     },
   );
+
+  it('puts multiplication or division before addition or subtraction', () => {
+    expect(orderOperatorsByPrecedence(['+', '*'])).toEqual(['*', '+']);
+    expect(orderOperatorsByPrecedence(['-', '/'])).toEqual(['/', '-']);
+    expect(orderOperatorsByPrecedence(['*', '+'])).toEqual(['*', '+']);
+  });
+
+  it('includes whole-number division in hard mode', () => {
+    const puzzle = generatePuzzle('hard', () => 0.999999);
+    expect(puzzle.operators).toContain('/');
+    expect(isPuzzleSolvable(puzzle)).toBe(true);
+  });
+
+  it('never places a high-precedence operator after a low-precedence operator', () => {
+    for (let index = 0; index < 250; index += 1) {
+      const puzzle = generatePuzzle('hard');
+      expect(
+        ['+', '-'].includes(puzzle.operators[0]) && ['*', '/'].includes(puzzle.operators[1]),
+      ).toBe(false);
+    }
+  });
+
+  it('treats permutations of the same three numbers as one signature', () => {
+    expect(solutionNumberSignature([10, 2, 3])).toBe(solutionNumberSignature([10, 3, 2]));
+  });
+
+  it('does not repeat a solution-number combination within a round', () => {
+    const seen = new Set<string>();
+    for (let index = 0; index < 60; index += 1) {
+      const puzzle = generatePuzzle('hard', () => 0.999999, seen);
+      const signature = puzzleNumberSignature(puzzle);
+      expect(seen.has(signature)).toBe(false);
+      seen.add(signature);
+    }
+  });
 });
