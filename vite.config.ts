@@ -3,7 +3,7 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig({
-  base: process.env.GITHUB_ACTIONS ? '/card-number-game/' : '/',
+  base: process.env.GITHUB_ACTIONS ? '/CardOperator/' : '/',
   server: {
     host: '0.0.0.0',
     port: 5173,
