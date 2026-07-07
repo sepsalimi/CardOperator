@@ -243,7 +243,7 @@ export default function App() {
     }
   }
 
-  const isCountdownRush = screen === 'game' && remainingMs <= 10_000 && remainingMs > 0;
+  const isCountdownRush = screen === 'game' && remainingMs <= 15_000 && remainingMs > 0;
 
   return (
     <main className="app-shell">
